@@ -26,7 +26,7 @@ The log files in the dataset are partitioned by year and month. For example, her
 > log_data/2018/11/2018-11-12-events.json
 > log_data/2018/11/2018-11-13-events.json
 And below is an example of what the data in a log file, 2018-11-12-events.json, looks like.
-![Log Data Example](/img/LogDataExample.png "Log Data Example")
+![Log Data Example](LogDataExample.png "Log Data Example")
 
 # Schema for Song Play Analysis
 Using the song and event datasets, you'll need to create a star schema optimized for queries on song play analysis. This includes the following tables.
