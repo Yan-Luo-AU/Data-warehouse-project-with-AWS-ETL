@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS staging_events (
     method VARCHAR,
     page VARCHAR,
     registration FLOAT,
-    sessionid INT NOT NULL,
+    sessionid INT NOT NULL SORTKEY DISTKEY,
     song VARCHAR,
     status INT,
     ts BIGINT NOT NULL,
@@ -45,9 +45,9 @@ CREATE TABLE IF NOT EXISTS staging_events (
 staging_songs_table_create = ("""
 CREATE TABLE IF NOT EXISTS staging_songs (
     num_songs INT,
-    artist_id VARCHAR NOT NULL,
-    artist_latitude VARCHAR,
-    artist_longitude VARCHAR,
+    artist_id VARCHAR NOT NULL SORTKEY DISTKEY,
+    artist_latitude FLOAT,
+    artist_longitude FLOAT,
     artist_location VARCHAR,
     artist_name VARCHAR,
     song_id VARCHAR NOT NULL,
@@ -59,9 +59,9 @@ CREATE TABLE IF NOT EXISTS staging_songs (
 
 songplay_table_create = ("""
    CREATE TABLE IF NOT EXISTS songplay(
-       songplay_id BIGINT IDENTITY(0,1) PRIMARY KEY, 
+       songplay_id BIGINT IDENTITY(0,1) PRIMARY KEY SORTKEY, 
        start_time TIMESTAMP NOT NULL, 
-       user_id VARCHAR NOT NULL, 
+       user_id INT NOT NULL DISTKEY, 
        level VARCHAR, 
        song_id VARCHAR NOT NULL, 
        artist_id VARCHAR NOT NULL, 
@@ -73,7 +73,7 @@ songplay_table_create = ("""
 
 user_table_create = ("""
     CREATE TABLE IF NOT EXISTS users (
-        user_id VARCHAR PRIMARY KEY, 
+        user_id INT PRIMARY KEY SORTKEY, 
         first_name VARCHAR, 
         last_name VARCHAR, 
         gender VARCHAR, 
@@ -83,9 +83,9 @@ user_table_create = ("""
 
 song_table_create = ("""
     CREATE TABLE IF NOT EXISTS songs (
-        song_id VARCHAR PRIMARY KEY, 
+        song_id VARCHAR PRIMARY KEY SORTKEY, 
         title VARCHAR, 
-        artist_id VARCHAR, 
+        artist_id VARCHAR NOT NULL, 
         year INT, 
         duration DECIMAL(9)
     );
@@ -93,17 +93,17 @@ song_table_create = ("""
 
 artist_table_create = ("""
     CREATE TABLE IF NOT EXISTS artists (
-        artist_id VARCHAR PRIMARY KEY, 
+        artist_id VARCHAR PRIMARY KEY SORTKEY, 
         artist_name VARCHAR, 
         artist_location VARCHAR, 
-        artist_latitude VARCHAR, 
-        artist_longitude VARCHAR
+        artist_latitude FLOAT, 
+        artist_longitude FLOAT
     );
 """)
 
 time_table_create = ("""
     CREATE TABLE IF NOT EXISTS time (
-        start_time TIMESTAMP PRIMARY KEY, 
+        start_time TIMESTAMP PRIMARY KEY SORTKEY, 
         hour SMALLINT, 
         day SMALLINT, 
         week SMALLINT, 
@@ -116,21 +116,20 @@ time_table_create = ("""
 # STAGING TABLES
 
 staging_events_copy = ("""
-    COPY staging_events FROM {}
-    CREDENTIALS 'aws_iam_role={}'
-    COMPUPDATE OFF region 'us-west-2'
-    TIMEFORMAT as 'epochmillisecs'
-    STATUPDATE ON
-    FORMAT AS JSON {};
-""").format(config.get('S3', 'LOG_DATA'), config.get('IAM_ROLE', 'ARN'), config.get('S3', 'LOG_JSONPATH'))
+    copy staging_events
+    from {}
+    iam_role {}
+    json {}
+    region 'us-west-2'
+""").format(config['S3']['LOG_DATA'], config['IAM_ROLE']['ARN'], config['S3']['LOG_JSONPATH'])
 
 staging_songs_copy = ("""
-    COPY staging_songs from {}
-    credentials 'aws_iam_role={}'
+    COPY staging_songs 
+    from {}
+    iam_role {}
     json 'auto'
-    REGION 'us-west-2'
-    JSON 'auto'
-""").format(config.get('S3','SONG_DATA'),config.get('IAM_ROLE','ARN'))
+    region 'us-west-2'   
+""").format(config['S3']['SONG_DATA'],config['IAM_ROLE']['ARN'])
 
 # FINAL TABLES
 
@@ -144,7 +143,7 @@ INSERT INTO songplay(
     session_id,
     location,
     user_agent)
-SELECT DISTINCT timestamp 'epoch' + se.ts/1000 * interval '1 second' as start_time,
+SELECT timestamp 'epoch' + se.ts/1000 * interval '1 second' as start_time,
        se.userId, 
        se.level, 
        ss.song_id, 
@@ -189,9 +188,10 @@ INSERT INTO artists(
     artist_latitude, 
     artist_longitude,
     artist_location)
-SELECT DISTINCT artist_id, artist_name, artist_latitude, artist_longitude, artist_location
-FROM staging_songs
-WHERE page = 'NextSong';
+SELECT DISTINCT ss.artist_id, ss.artist_name, ss.artist_latitude, ss.artist_longitude, ss.artist_location
+FROM staging_songs ss
+JOIN staging_events se ON (se.artist = ss.artist_name)
+WHERE se.page = 'NextSong';
 """)
 
 time_table_insert = ("""
